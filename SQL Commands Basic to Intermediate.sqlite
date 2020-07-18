@@ -1,0 +1,424 @@
+
+-- INTRO TO SQL BASICS/CREATING & UPDATING TABLES --
+
+CREATE TABLE friends(
+  id INTEGER,
+  name TEXT,
+  birthday DATE
+);
+
+INSERT INTO friends (id, name, birthday)
+VALUES (1, 'Jane Doe', '1990-05-30'),
+(2, 'Michael Smith', '1980-04-08'),
+(3, 'James Dean', '1931-02-19'),
+(4, "Null", '0000-00-00');
+
+UPDATE friends
+SET name = 'Jane Smith'
+WHERE id = 1;
+
+ALTER TABLE friends
+ADD COLUMN email text;
+
+UPDATE friends
+SET email = 'm__smith@gmail.com'
+WHERE id = 2;
+
+UPDATE friends
+SET email = 'screenlegend@movieheroes.com'
+WHERE id = 3;
+
+DELETE FROM friends
+WHERE id = 4;
+
+SELECT * FROM friends;
+
+--QUERIES USING WHERE, LIKE WITH AND/OR, & CASE COMMANDS --
+
+SELECT *
+FROM nomnom;
+
+SELECT DISTINCT(neighborhood)
+FROM nomnom;
+
+SELECT DISTINCT(cuisine)
+FROM nomnom;
+
+SELECT *
+FROM nomnom
+WHERE cuisine = 'Chinese';
+
+SELECT *
+FROM nomnom
+WHERE review >= 4;
+
+SELECT *
+FROM nomnom
+WHERE cuisine = 'Italian'
+ AND price LIKE '%$$$%';
+
+SELECT *
+FROM nomnom
+WHERE name LIKE '%meatball%';
+
+SELECT *
+FROM nomnom
+WHERE neighborhood = 'Midtown' 
+OR 'Downtown' OR 'Chinatown';
+
+SELECT *
+FROM nomnom
+WHERE health IS NULL;
+
+SELECT *
+FROM nomnom
+ORDER BY review DESC
+LIMIT 10;
+
+SELECT name, review,
+CASE
+WHEN review > 4.5 THEN 'Extraordinary'
+WHEN review > 4 THEN 'Excellent'
+WHEN review > 3 THEN 'Good'
+WHEN review > 2 THEN 'Fair'
+ELSE 'Poor'
+END AS 'Review'
+FROM nomnom;
+
+--QUERIES USING LIKE & WILDCARD ---
+
+SELECT *
+FROM transaction_data
+LIMIT 10;
+
+SELECT full_name, email, zip
+FROM transaction_data
+WHERE zip = 20252;
+
+SELECT full_name, email
+FROM transaction_data
+WHERE full_name = 'Art Vandelay'
+OR full_name LIKE '% der %';
+
+SELECT full_name, email, ip_address
+FROM transaction_data
+WHERE  ip_address LIKE '10.%';
+
+SELECT email
+FROM transaction_data
+WHERE email LIKE '%temp_email.com';
+
+SELECT *
+FROM transaction_data
+WHERE ip_address LIKE '120.%' AND full_name LIKE 'John%';
+
+-- QUERIES USING WHERE COMMANDS --
+
+SELECT *
+FROM users
+LIMIT 20;
+
+SELECT email, birthday
+FROM users
+WHERE birthday BETWEEN '1980-01-01' AND '1989-12-31';
+
+SELECT email, created_at
+FROM users
+WHERE created_at < '2017-05-01';
+
+SELECT email
+FROM users
+WHERE test = 'bears';
+
+SELECT email
+FROM users
+WHERE campaign LIKE 'BBB%';
+
+SELECT email
+FROM users
+WHERE campaign LIKE '%-2';
+
+SELECT email
+FROM users
+WHERE campaign IS NOT NULL
+AND test IS NOT NULL;
+
+-- QUERIES USING NOT NULL, WILDCARDS, & WHERE --
+
+SELECT *
+FROM orders
+LIMIT 10;
+
+SELECT MAX(order_date), MIN(order_date)
+FROM orders;
+SELECT DISTINCT order_date
+FROM orders
+ORDER BY 1 DESC;
+
+SELECT special_instructions
+FROM orders
+WHERE special_instructions IS NOT NULL;
+
+SELECT special_instructions
+FROM orders
+WHERE special_instructions IS NOT NULL
+ORDER BY 1 ASC;
+
+SELECT special_instructions
+FROM orders
+WHERE special_instructions LIKE '%sauce%';
+
+SELECT special_instructions
+FROM orders
+WHERE special_instructions LIKE '%door%';
+
+SELECT special_instructions
+FROM orders
+WHERE special_instructions LIKE '%box%';
+
+SELECT id AS '#', special_instructions AS 'Notes'
+FROM orders
+WHERE special_instructions LIKE '%box%';
+
+-- AGGRAGATE FUNCTIONS --
+
+SELECT *
+FROM startups;
+
+SELECT COUNT(*)
+FROM startups;
+
+SELECT SUM(valuation)
+FROM startups;
+
+SELECT MAX(raised)
+FROM startups;
+
+SELECT MAX(raised)
+FROM startups
+WHERE stage = 'Seed';
+
+SELECT MIN(founded)
+FROM startups;
+
+SELECT AVG(valuation)
+FROM startups;
+
+SELECT AVG(valuation), category
+FROM startups
+GROUP BY category;
+
+SELECT category, ROUND(AVG(valuation), 2)
+FROM startups
+GROUP BY category;
+
+SELECT ROUND(AVG(valuation), 2), category
+FROM startups
+GROUP BY 2
+ORDER BY 1 DESC;
+
+SELECT COUNT(*), category
+FROM startups
+GROUP BY category
+ORDER BY 1 DESC;
+
+SELECT category, COUNT(*)
+FROM startups
+GROUP BY category
+HAVING COUNT(*) >= 3
+ORDER BY 2 DESC;
+
+SELECT location, ROUND(AVG(employees))
+FROM startups
+GROUP BY location
+ORDER BY 2 DESC;
+
+SELECT location, ROUND(AVG(employees))
+FROM startups
+GROUP BY location
+HAVING ROUND(AVG(employees)) > 500
+ORDER BY 2 DESC;
+
+--GROUP & ORDER BY WITH AGGRAGATE FUNCTIONS --
+
+SELECT title, score
+FROM hacker_news
+ORDER BY score DESC
+LIMIT 10;
+
+SELECT SUM(score)
+FROM hacker_news;
+
+SELECT user, SUM(score)
+FROM hacker_news
+GROUP BY user
+HAVING SUM(score) > 200
+ORDER BY 2 DESC;
+
+SELECT (517 + 309 + 304 + 282) / 6366.0;
+
+SELECT user, COUNT(*)
+FROM hacker_news
+WHERE url LIKE '%watch?v=dQw4w9WgXcQ'
+GROUP BY user
+ORDER BY 2 DESC;
+
+SELECT CASE
+ WHEN url LIKE '%github.com%' THEN 'GitHub'
+ WHEN url LIKE '%medium.com%' THEN 'Medium'
+ WHEN url LIKE '%nytimes.com%' THEN 'NYT'
+ ELSE 'Other'
+ END AS 'Source',
+ COUNT(*)
+ FROM hacker_news
+ GROUP BY 1;
+
+SELECT timestamp
+FROM hacker_news
+LIMIT 1;
+
+SELECT timestamp, strftime('%H', timestamp)
+FROM hacker_news
+GROUP BY 1
+LIMIT 10;
+
+SELECT strftime('%H', timestamp), ROUND(AVG(score)), COUNT(*)
+FROM hacker_news
+GROUP BY 1
+ORDER BY 1 ASC;
+
+SELECT strftime('%H', timestamp) AS "Hour", ROUND(AVG(score)) AS 'AVG Score', COUNT(*) AS '# of Stories'
+FROM hacker_news
+WHERE timestamp IS NOT NULL
+GROUP BY 1
+ORDER BY 3 ASC;
+
+--QUERY WITH CASE & AGGRAGATE FUNCTION --
+
+SELECT *
+FROM met
+LIMIT 10;
+
+SELECT COUNT(*)
+FROM met;
+
+SELECT COUNT(*)
+FROM met
+WHERE category LIKE '%celery%';
+
+SELECT MIN(date), title, medium
+FROM met;
+
+SELECT country, COUNT(*)
+FROM met
+WHERE country IS NOT NULL
+GROUP BY  country 
+ORDER BY COUNT(*) DESC
+LIMIT 10;
+
+SELECT category, COUNT(*)
+FROM met
+GROUP BY 1
+HAVING COUNT(*) > 100;
+
+SELECT medium, COUNT(*)
+FROM met
+WHERE medium LIKE '%gold%'
+OR medium LIKE '%silver%'
+GROUP BY 1
+ORDER BY 2 DESC;
+
+SELECT CASE
+WHEN medium LIKE '%gold%' THEN 'Gold'
+WHEN medium LIKE '%silver%' THEN 'Silver'
+ELSE NULL
+END AS 'Cash_Metal',
+COUNT(*)
+FROM met
+WHERE Cash_Metal IS NOT NULL
+GROUP BY 1
+
+
+--AGGRAGATE FUNCTION WITH QUERY --
+
+SELECT SUM(money_in)
+FROM transactions;
+
+SELECT SUM(money_out)
+FROM transactions;
+
+SELECT SUM(money_in)
+FROM transactions
+WHERE currency ="BIT";
+
+SELECT COUNT(money_in)
+FROM transactions;
+
+SELECT COUNT(money_in)
+FROM transactions
+WHERE currency = 'BIT';
+
+SELECT MAX(money_in), MAX(money_out)
+FROM transactions;
+
+SELECT AVG(money_in)
+FROM transactions
+WHERE currency = 'ETH';
+
+SELECT date, ROUND(AVG(money_in)) AS 'AVG Buy', 
+ROUND(AVG(money_out)) AS 'AVG Sell'
+FROM transactions
+GROUP BY 1;
+
+--WORKING WITH MUTLIPLE TABLES UINSG JOIN COMMANDS --
+
+SELECT * FROM trips;
+SELECT * FROM riders;
+SELECT * FROM cars;
+
+SELECT *
+FROM riders
+CROSS JOIN cars;
+
+SELECT trips.date, trips.type, trips.cost,
+riders.username, riders.total_trips
+FROM trips
+LEFT JOIN riders
+ON trips.rider_id = riders.id;
+
+SELECT *
+FROM trips
+JOIN cars
+ON trips.car_id = cars.id;
+
+SELECT *
+FROM riders
+UNION
+SELECT *
+FROM riders2;
+
+SELECT ROUND(AVG(cost), 2)
+FROM trips;
+
+SELECT *
+FROM riders
+WHERE total_trips < 500
+UNION
+SELECT *
+FROM riders2
+WHERE total_trips < 500;
+
+SELECT *
+FROM cars
+WHERE status = 'active';
+SELECT COUNT(*)
+FROM cars
+WHERE status = 'active';
+
+SELECT *
+FROM cars
+ORDER BY trips_completed DESC
+LIMIT 2;
+SELECT id, trips_completed
+FROM cars
+ORDER BY 2 DESC;
