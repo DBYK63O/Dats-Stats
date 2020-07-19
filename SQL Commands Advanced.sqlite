@@ -1,3 +1,5 @@
+--MARKETING ATTRIBUTION -- 
+
 -- SELECT DISTINCT page_name
 -- FROM page_visits;
 
@@ -61,6 +63,139 @@ ON lt.user_id = pv.user_id
 GROUP BY utm_campaign
 ORDER BY COUNT(utm_campaign) DESC;
 
+-- CALCULATING USER CHURN RATE --
 
+WITH months AS (
+  SELECT
+  '2017-01-01' as first_day,
+  '2017-01-31' as last_day
+UNION
+SELECT
+'2017-02-01' as first_day,
+'2017-02-28' as last_day
+UNION
+SELECT
+'2017-03-01' as first_day,
+'2017-03-31' as last_day
+),
+cross_join AS
+(SELECT * FROM subscriptions
+CROSS JOIN months),
+status AS
+(SELECT id, first_day AS month,
+CASE
+  WHEN (subscription_start < first_day) 
+    AND (
+      subscription_end > first_day
+      OR subscription_end IS NULL) AND (segment = 87)
+    THEN 1
+  ELSE 0
+END as is_active_87,
+CASE
+  WHEN (subscription_start < first_day) 
+    AND (
+      subscription_end > first_day
+      OR subscription_end IS NULL) AND (segment = 30)
+     THEN 1
+  ELSE 0
+END as is_active_30,
+CASE
+WHEN (subscription_end BETWEEN first_day AND last_day) AND (segment = 87)
+THEN 1 
+ELSE 0
+END as is_cancelled_87,
+CASE
+WHEN (subscription_end BETWEEN first_day AND last_day) AND (segment = 30)
+THEN 1 
+ELSE 0
+END as is_cancelled_30
+FROM cross_join),
+status_aggregate AS (
+SELECT 
+month,
+SUM(is_active_87) AS sum_active_87,
+SUM(is_active_30) AS sum_active_30,
+SUM(is_cancelled_87) AS sum_canceled_87,
+SUM(is_cancelled_30) AS sum_canceled_30
+FROM status
+GROUP BY month
+)
+SELECT month,
+1.0 * sum_canceled_87/sum_active_87 AS churn_rate_87,
+1.0 * sum_canceled_30/sum_active_30 AS churn_rate_30
+FROM status_aggregate; 
+
+--USAGE FUNNEL --
+
+ SELECT *
+ FROM survey
+ LIMIT 10;
+
+ SELECT question, COUNT(DISTINCT user_id)
+ FROM survey
+ GROUP BY question;
+
+ SELECT *
+ FROM quiz
+ LIMIT 5;
+ SELECT *
+ FROM home_try_on
+ LIMIT 5;
+ SELECT *
+ FROM purchase
+ LIMIT 5;
+
+SELECT q.user_id,
+  h.user_id IS NOT NULL AS 'is_home_try_on',
+  h.number_of_pairs,
+  p.user_id IS NOT NULL AS 'is_purchase'
+FROM quiz q
+LEFT JOIN home_try_on h
+  ON q.user_id = h.user_id
+LEFT JOIN purchase p
+  ON p.user_id = q.user_id
+LIMIT 5;
+
+WITH q AS (
+  SELECT '1-Quiz' AS stage, COUNT(DISTINCT user_id)
+  FROM quiz),
+ h AS (
+  SELECT '2-Home_Try_On' AS stage, COUNT(DISTINCT user_id)
+  FROM home_try_on
+),
+p AS (
+  SELECT '3-Purchase' AS stage, COUNT(DISTINCT user_id)
+  FROM purchase
+)
+SELECT *
+FROM q
+UNION ALL SELECT *
+FROM h
+UNION ALL SELECT *
+FROM p;
+
+WITH base_table AS(
+  SELECT DISTINCT q.user_id,
+  h.user_id IS NOT NULL AS 'is_home_try_on',
+  h.number_of_pairs AS 'AB_Variant',
+  p.user_id IS NOT NULL AS 'is_purchase'
+FROM quiz q
+LEFT JOIN home_try_on h
+  ON q.user_id = h.user_id
+LEFT JOIN purchase p
+  ON p.user_id = q.user_id
+)
+SELECT AB_Variant, 
+SUM(CASE WHEN is_home_try_on = 1
+THEN 1
+ELSE 0
+END) 'Home_Trial',
+SUM(CASE WHEN is_purchase = 1
+THEN 1
+ELSE 0
+END) 'Purchase'
+FROM base_table
+GROUP BY AB_Variant
+HAVING Home_Trial > 0;
 
 
