@@ -1,0 +1,681 @@
+**SDWAN Configuration Examples
+**EXAMPLE - OMP Backup paths
+vSmart# conf t
+vSmart(config)# omp send-backup-paths 
+vSmart(config-omp)# commit and-quit 
+Commit complete.
+
+**EXAMPLE - setting up interface with TLOC color and IPSEC
+vpn 0
+ interface ge0/0
+  ip address 10.1.1.43/24
+  tunnel-interface
+   encapsulation ipsec
+   color mpls
+-Restrict CMD or Tunnel Group for traffic engineering
+vpn 0
+ interface ge0/0
+  ip dhcp-client
+  tunnel-interface
+   encapsulation ipsec
+   color mpls restrict
+vpn 0
+ interface ge0/0
+  ip dhcp-client
+  tunnel-interface
+   encapsulation ipsec
+   group 199
+**EXAMPLE -  Configuration for constructing the overlay and TLOCs
+vpn 0
+ interface ge0/0
+  description WAN-INET
+  ip address 96.3.0.1/24
+  !
+  tunnel-interface
+   encapsulation ipsec
+   color biz-internet
+   allow-service all
+  !
+  no shutdown
+!
+vpn 0
+ interface ge0/1
+  description WAN-MPLS
+  ip address 10.10.0.2/24
+  tunnel-interface
+   encapsulation ipsec
+   color mpls
+   allow-service all
+  !
+  no shutdown
+!
+vEdge-1# conf t
+vEdge-1(config)# vpn 0 int ge0/1
+vEdge-1(config-interface-ge0/1)# tunnel-interface
+vEdge-1(config-tunnel-interface)# color mpls restrict
+vEdge-1(config-tunnel-interface)# commit and-quit
+**EXAMPLE – Policies and directional application
+policy
+ lists
+  site-list HUB
+   site-id 50
+  !
+  site-list SPOKES
+   site-id 60
+   site-id 70
+   site-id 80
+   site-id 90
+  !
+control-policy POLICY-1
+  sequence 1
+   match tloc
+    site-list HUB
+   !
+   action accept
+   !
+  default-action reject
+ !
+apply-policy
+ site-list SPOKES
+  control-policy POLICY-1 out
+ !
+**EXAMPLE – VBOND as Root Cert and Boot Strap
+VBOND Bootstrap setup
+!
+system
+ host-name vBond
+ system-ip 1.1.1.10
+ site-id 1
+ organization-name Dats_and_stats-io
+ vbond 10.1.1.10 local vbond-only
+!
+vpn 0
+ interface ge0/0
+  ip address 10.1.1.10/24
+  no tunnel-interface
+  no shutdown
+ !
+!
+VMANAGE
+!
+system
+ host-name vManage
+ system-ip 1.1.1.20
+ site-id 1
+ organization-name Dats_and_stats-io
+ vbond 10.1.1.10
+!
+vpn 0
+ interface eth0
+  ip address 10.1.1.20/24
+  no shutdown
+ !
+!
+vpn 512
+ interface eth1
+  ip address 192.168.115.20/24
+  no shutdown
+ !
+!
+VSMART
+system
+ host-name vSmart
+ system-ip 1.1.1.30
+ site-id 1
+ organization-name Dats_and_stats-io
+ vbond 10.1.1.10
+!
+vpn 0
+ interface eth0
+  ip address 10.1.1.30/24
+  no tunnel-interface
+  no shutdown
+ !
+!
+VEDGE
+system
+ host-name vEdge-1
+ system-ip 1.1.1.40
+ site-id 100
+ organization-name Dats_and_stats-io
+ vbond 10.1.1.10
+!
+vpn 0
+ interface ge0/0
+  ip address 10.1.1.40/24
+  no tunnel-interface
+  no shutdown
+ !
+!
+
+vBond# vshell 
+vBond:~$ openssl genrsa -out ROOTCA.key 2048
+Generating RSA private key, 2048 bit long modulus
+........+++..............................................+++
+e is 65537 (0x10001)
+
+vBond:~$ openssl req -x509 -new -nodes -key ROOTCA.key -sha256 -days 1024 \
+>     -subj "/C=AU/ST=NSW/L=NSW/O=Dats_and_stats-io/CN=sdwan.lab" \
+>     -out ROOTCA.pem
+
+vBond:~$ ls -l
+total 12
+-rw-r--r-- 1 admin admin 1679 Mar 23 09:41 ROOTCA.key
+-rw-r--r-- 1 admin admin 1285 Mar 23 09:41 ROOTCA.pem
+-rw-r--r-- 1 admin admin  392 Mar 23 09:37 archive_id_rsa.pub
+
+# Excecute the following command in CLI mode on all devices
+request root-cert-chain install scp://admin@10.1.1.10:/home/admin/ROOTCA.pem vpn 0
+
+Uploading root-ca-cert-chain via VPN 0
+Copying ... admin@10.1.1.10:/home/admin/ROOTCA.pem via VPN 0
+Warning: Permanently added '10.1.1.10' (ECDSA) to the list of known hosts.
+viptela 16.3.2 
+admin@10.1.1.10's password: 
+ROOTCA.pem                                    100% 1285     1.1MB/s   00:00    
+Successfully installed the root certificate chain
+
+**Bring up tunnel interfaces**
+# on vManage and vSmart
+!
+vpn 0
+ interface eth0
+  tunnel-interface
+!
+
+# on vBond and vEdges
+!
+vpn 0
+ interface ge0/0
+  tunnel-interface
+   encapsulation ipsec
+   allow-service all
+!
+**Basic IP, system IP, site-id, and routing
+cEdge# config-transaction
+ hostname datsEdge
+ !
+  int GigabitEthernet1
+  ip address 96.3.1.1 255.255.255.0
+  no shut
+ !
+ int GigabitEthernet2
+  ip address 10.10.1.1 255.255.255.0
+  no shut
+ !
+  ip route 0.0.0.0 0.0.0.0 39.3.1.254
+  ip route 0.0.0.0 0.0.0.0 10.10.1.254	
+  ip host vbond.dats_and_stats.io 10.1.1.10
+ !
+ system
+  system-ip 1.1.1.1
+  site-id 1
+  organization-name "dats_and_stats-io"
+  vbond vbond.dats_and_stats.io
+ commit
+**SDWAN Data Plane tunnels
+  int GigabitEthernet1
+  tunnel-interface
+   color biz-internet
+   encapsulation ipsec
+ !
+  int GigabitEthernet2
+  tunnel-interface
+   color mpls restrict
+   encapsulation ipsec
+ !
+ interface Tunnel 1
+  ip unnumbered GigabitEthernet1
+  tunnel source GigabitEthernet1
+  tunnel mode sdwan
+!
+ interface Tunnel 2
+  ip unnumbered GigabitEthernet2
+  tunnel source GigabitEthernet2
+  tunnel mode sdwan
+ commit
+**EXAMPLE – Preferred DC in Dual DC Topology
+Step 1: Creating the necessary site-lists
+policy
+ lists
+  site-list PRIMARY-HUB
+   site-id 1
+  !
+  site-list BACKUP-HUB
+   site-id 6
+  !
+  site-list SPOKES
+   site-id 3-5
+2) Adjusting the overlay topology via controlling which tloc routes are advertised to which particular sites
+-In this scenario prevent spokes from receiving tlocs of other spokes. Configure a new control policy and will apply it to the SPOKES site list in an outbound direction.
+policy
+ control-policy VSMART-TO-SPOKES
+  sequence 11
+   match tloc
+    site-list PRIMARY-HUB
+   !
+   action accept
+  !
+  sequence 21
+   match tloc
+    site-list BACKUP-HUB
+   !
+   action accept
+  !
+  default-action reject
+!
+-Apply the policies in the outbound direction of VSmart.
+apply-policy
+ site-list SPOKES
+  control-policy VSMART-TO-SPOKES out
+ !
+
+3) Traffic Engineering
+policy
+ lists
+  tloc-list PRIMARY-AND-BACKUP-TLOCS
+   tloc 1.1.1.1 color mpls encap ipsec
+   tloc 1.1.1.1 color biz-internet encap ipsec
+   tloc 2.2.2.2 color mpls encap ipsec
+   tloc 2.2.2.2 color biz-internet encap ipsec
+   tloc 6.6.6.6 color mpls encap ipsec
+   tloc 6.6.6.6 color biz-internet encap ipsec
+  !
+omp
+ send-path-limit  16
+!
+-Adjust the ecmp-limit value of vEdges accordingly.
+omp
+ ecmp-limit  16
+!
+-Configure the OMP routing in the control-policy applied to spokes.
+policy
+ control-policy VSMART-TO-SPOKES
+  sequence 11
+   match tloc
+    site-list PRIMARY-HUB
+   !
+   action accept
+  !
+  sequence 21
+   match tloc
+    site-list BACKUP-HUB
+   !
+   action accept
+  !
+// matches all spokes' prefixes
+  sequence 31
+   match route
+    site-list SPOKES
+   !
+// changes the next-hop to point to both data centers
+   action accept
+    set
+     tloc-list PRIMARY-AND-BACKUP-TLOCS
+  !
+// matches all dc2's prefixes
+  sequence 41
+   match route
+    site-list BACKUP-HUB
+   !
+// change the next-hop to point to both data centers
+   action accept
+    set
+     tloc-list PRIMARY-AND-BACKUP-TLOCS
+  !
+// matches all dc1's prefixes
+  sequence 51
+   match route
+    site-list PRIMARY-HUB
+   !
+// accepts them without changing the next-hop
+   action accept
+  !
+  default-action reject
+!
+
+-Making DC1 a Primary hub for all VPNs
+vSmart# conf t
+Entering configuration mode terminal
+vSmart(config)# 
+vSmart(config)# policy control-policy VSMART-TO-SPOKES sequence 11 action accept set preference 110
+vSmart(config-set)# commit and-quit
+Commit complete.
+
+-Enable  End-to-end path tracking on the primary hub
+// we must enable the service TE on vEdges 1 and 2
+vpn 0
+ service TE
+!
+-Configure two additional tloc-list and apply new sequences for DC failover
+policy
+ lists
+  tloc-list PRIMARY-HUB-INET
+   tloc 1.1.1.1 color biz-internet encap ipsec
+   tloc 2.2.2.2 color biz-internet encap ipsec
+  !
+  tloc-list PRIMARY-HUB-MPLS
+   tloc 1.1.1.1 color mpls encap ipsec
+   tloc 2.2.2.2 color mpls encap ipsec
+  !
+policy
+ control-policy VSMART-TO-SPOKES
+  sequence 11
+   match tloc
+    site-list PRIMARY-HUB
+   !
+   action accept
+  !
+  sequence 21
+   match tloc
+    site-list BACKUP-HUB
+   !
+   action accept
+  !
+  sequence 31
+   match route
+    site-list SPOKES
+   !
+   action accept
+    set
+     tloc-list PRIMARY-AND-BACKUP-TLOCS
+  !
+  sequence 41
+   match route
+    color     mpls
+    site-list BACKUP-HUB
+   !
+   action accept
+    set
+     tloc-action primary
+     tloc-list   PRIMARY-HUB-MPLS
+  !
+  sequence 42
+   match route
+    color     biz-internet
+    site-list BACKUP-HUB
+   !
+   action accept
+    set
+     tloc-action primary
+     tloc-list   PRIMARY-HUB-INET
+  !
+sequence 51
+   match route
+    site-list PRIMARY-HUB
+   !
+   action accept
+  !
+  default-action reject
+!
+
+
+
+**EXAMPLE – ACL – Implicit vs Explicit 
+vEdge-1(config-tunnel-interface)# allow-service ?
+Possible completions:
+  all       Allow all traffic.
+  bgp       Allow/deny BGP
+  dhcp      Allow/deny DHCP
+  dns       Allow/deny DNS
+  https     Allow/deny HTTPS
+  icmp      Allow/deny ICMP
+  netconf   Allow/deny NETCONF
+  ntp       Allow/deny NTP
+  ospf      Allow/deny OSPF
+  sshd      Allow/deny SSH
+  stun      Allow/deny STUN
+vEdge-1# conf t
+Entering configuration mode terminal
+vEdge-1(config)# vpn 0 interface ge0/1 tunnel-interface 
+vEdge-1(config-tunnel-interface)# allow-service sshd 
+vEdge-1(config-tunnel-interface)# commit and-quit 
+Commit complete.
+vEdge-1# request execute vpn 0 ssh -l admin 10.10.0.4
+viptela 20.6.1 
+Password: 
+Last login: Sun Oct 10 08:33:03 UTC 2021 from 10.10.0.1 on pts/0
+Welcome to Viptela CLI
+admin connected from 10.10.0.1 using ssh on vEdge-4
+vEdge-4#
+policy
+ access-list DENY-TELNET
+  sequence 11
+   match
+    destination-port 23
+   !
+   action drop
+  !
+  default-action accept
+!
+vpn 5
+ interface ge0/5
+  ip address 172.16.1.1/24
+  no shutdown
+  access-list DENY-TELNET in
+ !
+**EXAMPLE – QOS
+QOS configuration
+Step one define forwarding classes and map them to a hardware queue:
+vEdge-3# conf t 
+Entering configuration mode terminal
+vEdge-3(config)# policy
+vEdge-3(config-policy)# cloud-qos?
+Possible completions:
+ cloud-qos Enable/Disable QoS for vEdge Cloud cloud-qos-service-side Enable/Disable QoS for vEdge Cloud on service side
+vEdge-3(config-policy)# cloud-qos
+vEdge-3(config-policy)# cloud-qos-service-side
+vEdge-3(config-policy)# commit and-quit 
+Commit complete.policy
+ class-map
+  class REAL-TIME queue 0
+  class CRITICAL-DATA queue 1
+  class BEST-EFFORT queue 2
+!
+2) Configure the Qos Shceduler for each user-defined forwarding class
+policy
+ qos-scheduler REAL-TIME
+  class             REAL-TIME
+  bandwidth-percent 30
+  buffer-percent    30
+ scheduling llq drops tail-drop
+ !
+ qos-scheduler CRITICAL-DATA
+  class             CRITICAL-DATA
+  bandwidth-percent 40
+  buffer-percent    40
+ scheduling wrr drops red-drop
+ !
+ qos-scheduler BEST-EFFORT
+  class             BEST-EFFORT
+  bandwidth-percent 30
+  buffer-percent    30
+ scheduling wrr drops red-drop
+ !
+3) Group the QOS schedulers into a single Qos map
+policy
+  qos-map 3-QUEUES-QOS-MAP
+    qos-scheduler REAL-TIME
+    qos-scheduler CRITICAL-DATA
+    qos-scheduler BEST-EFFORT
+!
+vEdge-3# show policy qos-scheduler-info
+
+QOS SCHEDULER  BANDWIDTH  BUFFER                            
+NAME           PERCENT    PERCENT  QUEUE  QOS MAP NAME      
+------------------------------------------------------------
+REAL-TIME      30         30       0      3-QUEUES-QOS-MAP  
+CRITICAL-DATA  40         40       1      3-QUEUES-QOS-MAP  
+BEST-EFFORT    30         30       2      3-QUEUES-QOS-MAP  
+4) Apply the Qos-map on the egress transport inerfaces
+vEdge-3# conf t
+Entering configuration mode terminal
+vEdge-3(config)# vpn 0 interface ge0/0                 
+vEdge-3(config-interface-ge0/0)# qos-map 3-QUEUES-QOS-MAP   
+vEdge-3(config)# vpn 0 interface ge0/1                 
+vEdge-3(config-interface-ge0/1)# qos-map 3-QUEUES-QOS-MAP          
+vEdge-3(config-interface-ge0/1)# commit and-quit
+Commit complete.
+vEdge-3# show policy qos-map-info
+
+                  INTERFACE  
+QOS MAP NAME      NAME       
+-----------------------------
+3-QUEUES-QOS-MAP  ge0/0      
+                  ge0/1
+
+**EXAMPLE – Data Policy
+DATA POLICY
+policy
+ access-list VPN0-Secure-Access-In
+    sequence 1
+     match
+      source-data-prefix-list Device-Access-ICMP
+      protocol 1
+     !
+     action accept
+     !
+    !
+    sequence 11
+     match
+      source-data-prefix-list Device-Access-NTP
+      source-port 123
+     !
+     action accept
+     !
+    !
+    sequence 21
+     match
+      destination-port 22
+      source-data-prefix-list SSH_ACCESS_List
+     !
+     action accept
+     !
+    !
+    sequence 31
+     match
+      destination-port 161
+      source-data-prefix-list Device-Access-SNMP
+     !
+     action accept
+     !
+    !
+    sequence 41
+     match
+      source-data-prefix-list TACACS
+      source-port 49
+     !
+     action accept
+     !
+    !
+    sequence 51
+     match
+      source-data-prefix-list RADIUS
+      source-port 1645-1646
+     !
+     action accept
+     !
+    !
+  default-action drop
+ !
+
+lists
+  data-prefix-list Device-Access-ICMP
+   ip-prefix 50.X.X.X/24
+  !
+  data-prefix-list Device-Access-NTP
+   ip-prefix 50.X.X.X/32 
+  !
+  data-prefix-list Device-Access-SNMP
+   ip-prefix 198.X.X.X/32 
+  !
+  data-prefix-list RADIUS
+   ip-prefix 50.X.X.X/32 
+  !
+  data-prefix-list SSH_ACCESS_List
+   ip-prefix 50.X.X.X/32 
+  !
+  data-prefix-list TACACS
+   ip-prefix 50.X.X.X/32 
+  !
+
+**EXAMPLE – Security Policy
+
+policy
+ advanced-inspection-profile DIA-Dats_and_stats_IDS
+  intrusion-prevention DIA-IDS
+  tls-decryption action skip-decrypt
+ !
+ zone-based-policy Unified-DIA
+    sequence 11
+     seq-name Office365
+     match
+      source-ip X.X.X.X/8
+      app-list-flat Microsoft-Office365
+     !
+     action inspect
+      advanced-inspection-profile DIA-Dats_and_stats_IDS
+    !
+    sequence 31
+     seq-name Office365-FQDN
+     match
+      source-ip X.X.X.X/8
+      destination-fqdn-list Office365-FQDN
+     !
+     action inspect
+      advanced-inspection-profile DIA-Dats_and_stats_IDS
+     !
+    sequence 51
+     seq-name Zoom
+     match
+      source-ip X.X.X.X/8
+      app-list-flat ZOOM
+     !
+     action inspect
+      advanced-inspection-profile DIA-Dats_and_stats_IDS
+     !
+    !
+  default-action drop
+ !
+ intrusion-prevention DIA-IDS
+  security-level balanced
+  inspection-mode detection
+  logging host X.X.X.X vpn 10
+  log-level err
+ !
+  zone VPN0
+   vpn 0 
+  !
+  zone VPN10
+   vpn 10 
+  !
+  zone-pair ZP_VPN10_VPN0_Unified-DIA
+   source-zone VPN10
+   destination-zone VPN0
+   zone-policy Unified-DIA
+  !
+   high-speed-logging 
+   server-ip X.X.X.X
+   port 2055
+   vrf 10
+  !
+ lists
+  fqdn-list Office365-FQDN
+   pattern ".*\.sharepoint\.com"
+   pattern "outlook\.office365\.com"
+   pattern ".*\.office365\.com"
+  !
+  local-app-list Microsoft-Office365
+   app ms-office-365 
+   app ms-teams 
+   app outlook-web-service 
+  !
+  local-app-list ZOOM
+   app zoom-meetings 
+  !
+ !
+ failure-mode open
+ audit-trail on
+ advanced-inspection-profile DIA-Dats_and_stats_IDS
+!
+
